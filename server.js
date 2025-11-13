@@ -9,23 +9,25 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: ['http://localhost:5173', 'https://barber-frontend-mu.vercel.app', '*'],
   credentials: true
 }));
 app.use(express.json());
 
-// MongoDB Connection (optional - will work with mock data if not connected)
+// MongoDB Connection
 const connectDB = async () => {
   try {
-    if (!process.env.MONGODB_URI || process.env.MONGODB_URI.includes('localhost')) {
-      console.log('⚠️  Local MongoDB not detected. Using mock data.');
-      console.log('💡 To use a database, set MONGODB_URI in .env to MongoDB Atlas URL');
+    if (!process.env.MONGODB_URI) {
+      console.log('⚠️  MONGODB_URI not set in environment variables');
       return;
     }
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+    });
     console.log('✅ MongoDB Connected successfully!');
   } catch (error) {
-    console.log('⚠️  MongoDB connection failed - using mock data:', error.message);
+    console.log('❌ MongoDB connection failed:', error.message);
+    process.exit(1);
   }
 };
 
