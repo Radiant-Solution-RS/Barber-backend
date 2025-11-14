@@ -25,6 +25,18 @@ const bookingSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  location: {
+    id: {
+      type: String,
+      required: false,
+    },
+    name: {
+      type: String,
+      required: false,
+    },
+    address: String,
+    mapUrl: String,
+  },
   date: {
     type: Date,
     required: true,

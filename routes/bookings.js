@@ -28,7 +28,9 @@ router.get('/', authMiddleware, async (req, res) => {
 // Create booking
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { service, serviceName, barber, date, time, price, notes } = req.body;
+    const { service, serviceName, barber, date, time, price, notes, location } = req.body;
+    
+    console.log('Received booking data:', { service, serviceName, barber, date, time, price, notes, location });
 
     const booking = new Booking({
       user: req.user.id,
@@ -39,12 +41,15 @@ router.post('/', authMiddleware, async (req, res) => {
       time,
       price,
       notes,
+      location,
     });
 
     await booking.save();
+    console.log('Booking saved:', booking);
     await booking.populate('user barber service');
     res.status(201).json(booking);
   } catch (error) {
+    console.error('Error creating booking:', error);
     res.status(500).json({ message: error.message });
   }
 });
