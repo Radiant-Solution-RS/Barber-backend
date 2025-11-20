@@ -3,7 +3,6 @@ const router = express.Router();
 const Barber = require('../models/Barber');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 
-// Get all barbers (public)
 router.get('/', async (req, res) => {
   try {
     const barbers = await Barber.find({ isActive: true });
