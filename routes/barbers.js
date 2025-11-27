@@ -12,7 +12,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get all barbers including inactive (admin only)
 router.get('/all', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const barbers = await Barber.find();
@@ -22,7 +21,7 @@ router.get('/all', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// Create barber (admin only)
+
 router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { name, email, phone, specialties } = req.body;
@@ -46,14 +45,22 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// Update barber (admin only)
+
 router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { name, email, phone, specialties, isActive } = req.body;
+    const { name, email, phone, specialties, isActive, schedule, services } = req.body;
+    
+    const updateData = { name, email, phone, specialties, isActive };
+    if (schedule) {
+      updateData.schedule = schedule;
+    }
+    if (services !== undefined) {
+      updateData.services = services;
+    }
     
     const barber = await Barber.findByIdAndUpdate(
       req.params.id,
-      { name, email, phone, specialties, isActive },
+      updateData,
       { new: true }
     );
 
@@ -67,7 +74,59 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
-// Delete barber (admin only)
+router.put('/:id/schedule', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const schedule = req.body;
+    
+    const barber = await Barber.findByIdAndUpdate(
+      req.params.id,
+      { schedule },
+      { new: true }
+    );
+
+    if (!barber) {
+      return res.status(404).json({ message: 'Barber not found' });
+    }
+
+    res.json(barber);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+
+router.put('/:id/weekly-schedule', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { weekSchedule } = req.body; 
+    
+    const barber = await Barber.findById(req.params.id);
+    if (!barber) {
+      return res.status(404).json({ message: 'Barber not found' });
+    }
+
+    if (!barber.scheduleOverrides) {
+      barber.scheduleOverrides = [];
+    }
+
+    weekSchedule.forEach(daySchedule => {
+      const existingIndex = barber.scheduleOverrides.findIndex(
+        override => override.date === daySchedule.date
+      );
+
+      if (existingIndex >= 0) {
+        barber.scheduleOverrides[existingIndex] = daySchedule;
+      } else {
+        barber.scheduleOverrides.push(daySchedule);
+      }
+    });
+
+    await barber.save();
+    res.json(barber);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const barber = await Barber.findByIdAndDelete(req.params.id);

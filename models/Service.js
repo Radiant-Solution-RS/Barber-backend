@@ -6,6 +6,10 @@ const serviceSchema = new mongoose.Schema({
     required: true,
   },
   description: String,
+  category: {
+    type: String,
+    default: 'Uncategorized',
+  },
   price: {
     type: Number,
     required: true,

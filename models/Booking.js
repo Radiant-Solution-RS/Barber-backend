@@ -52,6 +52,43 @@ const bookingSchema = new mongoose.Schema({
   },
   price: Number,
   notes: String,
+  // Payment fields
+  paymentType: {
+    type: String,
+    enum: ['prepaid', 'postpaid'],
+    default: 'postpaid',
+  },
+  paymentStatus: {
+    type: String,
+    enum: ['pending', 'paid', 'failed'],
+    default: 'pending',
+  },
+  stripeSessionId: String,
+  isPaid: {
+    type: Boolean,
+    default: false,
+  },
+  // Source field
+  source: {
+    type: String,
+    enum: ['Website', 'Treatwell', 'Walk-in', 'Phone', 'Manual'],
+    default: 'Website',
+  },
+  // Comments field
+  comments: [{
+    text: {
+      type: String,
+      required: true,
+    },
+    createdBy: {
+      type: String,
+      default: 'Admin',
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  }],
   createdAt: {
     type: Date,
     default: Date.now,

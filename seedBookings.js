@@ -5,39 +5,38 @@ const User = require('./models/User');
 const Barber = require('./models/Barber');
 const Service = require('./models/Service');
 
-// Get MongoDB URI from environment or use default
+
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/barber-shop';
 
 const seedBookings = async () => {
 	try {
-		console.log('🌱 Starting to seed bookings...');
-		console.log('📡 Connecting to MongoDB...');
+		console.log(' Starting to seed bookings...');
+		console.log(' Connecting to MongoDB...');
 
-		// Connect to MongoDB
+		
 		await mongoose.connect(MONGODB_URI);
-		console.log('✅ Connected to MongoDB successfully!');
+		console.log(' Connected to MongoDB successfully!');
 
-		// Get all users, barbers, and services
+		
 		const customers = await User.find({ role: 'customer' }).limit(10);
 		const barbers = await Barber.find().limit(5);
 		const services = await Service.find().limit(5);
 
 		if (customers.length === 0) {
-			console.log('❌ No customers found. Please create customers first.');
+			console.log(' No customers found. Please create customers first.');
 			return;
 		}
 
 		if (barbers.length === 0) {
-			console.log('❌ No barbers found. Please create barbers first.');
+			console.log(' No barbers found. Please create barbers first.');
 			return;
 		}
 
 		if (services.length === 0) {
-			console.log('❌ No services found. Please create services first.');
+			console.log(' No services found. Please create services first.');
 			return;
 		}
 
-		// Clear existing bookings for today (optional)
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
 		const tomorrow = new Date(today);
@@ -49,9 +48,8 @@ const seedBookings = async () => {
 				$lt: tomorrow
 			}
 		});
-		console.log('🗑️  Cleared existing bookings for today');
-
-		// Time slots for today
+		console.log('  Cleared existing bookings for today');
+		
 		const timeSlots = [
 			'9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
 			'1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM',
@@ -60,16 +58,15 @@ const seedBookings = async () => {
 
 		const statuses = ['confirmed', 'pending', 'completed'];
 		const bookingsToCreate = [];
-
-		// Create appointments for each barber
+		
 		barbers.forEach((barber, barberIndex) => {
-			// Create 5-8 random appointments for each barber
+			
 			const numAppointments = Math.floor(Math.random() * 4) + 5;
 			
 			const usedTimeSlots = new Set();
 			
 			for (let i = 0; i < numAppointments; i++) {
-				// Pick a random time slot that hasn't been used for this barber
+				
 				let timeSlot;
 				let attempts = 0;
 				do {
@@ -99,18 +96,18 @@ const seedBookings = async () => {
 						name: 'Main Shop',
 						address: '123 Barber Street'
 					},
-					createdAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000) // Random time in last 7 days
+					createdAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000) 
 				});
 			}
 		});
 
-		// Insert all bookings
+		
 		const insertedBookings = await Booking.insertMany(bookingsToCreate);
 		
-		console.log(`✅ Successfully created ${insertedBookings.length} bookings!`);
-		console.log(`📅 Date: ${today.toLocaleDateString()}`);
-		console.log(`👥 ${barbers.length} barbers with appointments`);
-		console.log(`🎯 Status breakdown:`);
+		console.log(` Successfully created ${insertedBookings.length} bookings!`);
+		console.log(` Date: ${today.toLocaleDateString()}`);
+		console.log(` ${barbers.length} barbers with appointments`);
+		console.log(` Status breakdown:`);
 		
 		const statusCount = {};
 		insertedBookings.forEach(b => {
@@ -122,11 +119,11 @@ const seedBookings = async () => {
 		});
 
 		mongoose.connection.close();
-		console.log('\n🎉 Seeding completed successfully!');
+		console.log('\n Seeding completed successfully!');
 		process.exit(0);
 
 	} catch (error) {
-		console.error('❌ Error seeding bookings:', error);
+		console.error(' Error seeding bookings:', error);
 		mongoose.connection.close();
 		process.exit(1);
 	}

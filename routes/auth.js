@@ -3,8 +3,9 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { authMiddleware } = require('../middleware/auth');
 
-// Register
+
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, phone, role } = req.body;
@@ -46,7 +47,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login
+
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -74,6 +75,56 @@ router.post('/login', async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.put('/user/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, phone, email, gender, birthMonth, birthDay, birthYear, marketingConsent, prepaymentRequired, note } = req.body;
+
+    if (req.user.id !== id && req.user.role !== 'admin' && req.user.role !== 'owner') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    
+    if (name) user.name = name;
+    if (phone !== undefined) user.phone = phone;
+    if (email) user.email = email;
+    if (gender) user.gender = gender;
+    if (birthMonth !== undefined) user.birthMonth = birthMonth;
+    if (birthDay !== undefined) user.birthDay = birthDay;
+    if (birthYear !== undefined) user.birthYear = birthYear;
+    if (marketingConsent !== undefined) user.marketingConsent = marketingConsent;
+    if (prepaymentRequired !== undefined) user.prepaymentRequired = prepaymentRequired;
+    if (note !== undefined) user.note = note;
+
+    await user.save();
+
+    res.json({
+      message: 'User updated successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        gender: user.gender,
+        birthMonth: user.birthMonth,
+        birthDay: user.birthDay,
+        birthYear: user.birthYear,
+        marketingConsent: user.marketingConsent,
+        prepaymentRequired: user.prepaymentRequired,
+        note: user.note,
         role: user.role,
       },
     });
