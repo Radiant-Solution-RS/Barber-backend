@@ -15,7 +15,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET || 'demo',
 });
 
-// Configure Multer Storage for Cloudinary
+// Configure Multer Storage for Cloudinary - Products
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -32,4 +32,21 @@ const upload = multer({
   },
 });
 
-module.exports = { cloudinary, upload };
+// Configure Multer Storage for Team Members (Barbers)
+const barberStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'barber-team', // Folder name in Cloudinary for team members
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation: [{ width: 500, height: 500, crop: 'fill', gravity: 'face' }], // Optimized for profile pictures
+  },
+});
+
+const uploadBarberImage = multer({ 
+  storage: barberStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max file size
+  },
+});
+
+module.exports = { cloudinary, upload, uploadBarberImage };

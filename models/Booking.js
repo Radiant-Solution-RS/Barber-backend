@@ -89,6 +89,11 @@ const bookingSchema = new mongoose.Schema({
       default: Date.now,
     },
   }],
+  // Review tracking
+  hasReview: {
+    type: Boolean,
+    default: false,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

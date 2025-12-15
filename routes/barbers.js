@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Barber = require('../models/Barber');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const { uploadBarberImage } = require('../config/cloudinary');
 
 router.get('/', async (req, res) => {
   try {
@@ -9,6 +10,35 @@ router.get('/', async (req, res) => {
     res.json(barbers);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// Upload barber/team member image to Cloudinary (admin only)
+router.post('/upload-image', authMiddleware, adminMiddleware, uploadBarberImage.single('image'), async (req, res) => {
+  try {
+    console.log('Barber image upload request received');
+    console.log('File:', req.file);
+    
+    if (!req.file) {
+      console.error('No file in request');
+      return res.status(400).json({ message: 'No image file provided' });
+    }
+
+    console.log('Barber image uploaded successfully to:', req.file.path);
+    
+    // Cloudinary automatically uploads and returns the URL
+    res.json({
+      message: 'Image uploaded successfully',
+      imageUrl: req.file.path, // Cloudinary URL
+      publicId: req.file.filename, // Cloudinary public ID
+    });
+  } catch (error) {
+    console.error('Error uploading barber image:', error);
+    res.status(500).json({ 
+      message: 'Error uploading image', 
+      error: error.message,
+      stack: error.stack 
+    });
   }
 });
 
@@ -24,7 +54,7 @@ router.get('/all', authMiddleware, adminMiddleware, async (req, res) => {
 
 router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { name, email, phone, specialties } = req.body;
+    const { name, email, phone, specialties, profileImage } = req.body;
 
     const existingBarber = await Barber.findOne({ email });
     if (existingBarber) {
@@ -36,6 +66,7 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
       email,
       phone,
       specialties,
+      profileImage,
     });
 
     await barber.save();
@@ -48,7 +79,7 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
 
 router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { name, email, phone, specialties, isActive, schedule, services } = req.body;
+    const { name, email, phone, specialties, isActive, schedule, services, profileImage } = req.body;
     
     const updateData = { name, email, phone, specialties, isActive };
     if (schedule) {
@@ -56,6 +87,9 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
     }
     if (services !== undefined) {
       updateData.services = services;
+    }
+    if (profileImage !== undefined) {
+      updateData.profileImage = profileImage;
     }
     
     const barber = await Barber.findByIdAndUpdate(
