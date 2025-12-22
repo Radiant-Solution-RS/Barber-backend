@@ -108,7 +108,7 @@ router.put('/user/:id', authMiddleware, async (req, res) => {
     if (marketingConsent !== undefined) user.marketingConsent = marketingConsent;
     if (prepaymentRequired !== undefined) user.prepaymentRequired = prepaymentRequired;
     if (note !== undefined) user.note = note;
-
+    
     await user.save();
 
     res.json({

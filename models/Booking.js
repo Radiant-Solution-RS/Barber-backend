@@ -1,10 +1,46 @@
 const mongoose = require('mongoose');
 
+/**
+ * Booking Model - Updated for Treatwell-style guest bookings
+ * 
+ * Key changes:
+ * - User field is now OPTIONAL (supports guest bookings)
+ * - Guest customer reference added
+ * - Multiple services support (cart)
+ * - Cancellation policy acceptance tracking
+ * - No-show tracking
+ * - Stripe SetupIntent and PaymentIntent tracking
+ * - Audit trail for cancellations and charges
+ */
 const bookingSchema = new mongoose.Schema({
+  // User reference - OPTIONAL (null for guest bookings)
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    required: false,
+  },
+  
+  // Guest customer info (for bookings without account)
+  guestCustomer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'GuestCustomer',
+    required: false,
+  },
+  
+  // Direct customer info (always stored for quick access)
+  customerInfo: {
+    name: {
+      type: String,
+      required: true,
+    },
+    email: {
+      type: String,
+      required: true,
+    },
+    phone: {
+      type: String,
+      required: true,
+    },
   },
   salon: {
     type: mongoose.Schema.Types.ObjectId,
@@ -16,6 +52,27 @@ const bookingSchema = new mongoose.Schema({
     ref: 'Barber',
     required: false,
   },
+  // Service cart (supports multiple services)
+  services: [{
+    serviceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Service',
+    },
+    serviceName: {
+      type: String,
+      required: true,
+    },
+    price: {
+      type: Number,
+      required: true,
+    },
+    duration: {
+      type: Number,
+      required: true,
+    },
+  }],
+  
+  // Legacy single service support (for backward compatibility)
   service: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Service',
@@ -23,7 +80,7 @@ const bookingSchema = new mongoose.Schema({
   },
   serviceName: {
     type: String,
-    required: true,
+    required: false,
   },
   location: {
     id: {
@@ -50,20 +107,63 @@ const bookingSchema = new mongoose.Schema({
     enum: ['pending', 'confirmed', 'completed', 'cancelled'],
     default: 'pending',
   },
+  // Total booking price and duration
+  totalPrice: {
+    type: Number,
+    required: true,
+  },
+  totalDuration: {
+    type: Number,
+    // Total duration in minutes
+  },
+  
+  // Legacy price field (backward compatibility)
   price: Number,
   notes: String,
-  // Payment fields
+  
+  // Cancellation policy acceptance
+  cancellationPolicyAccepted: {
+    type: Boolean,
+    default: false,
+    required: true,
+  },
+  cancellationPolicyAcceptedAt: {
+    type: Date,
+  },
+  
+  // No-show tracking
+  isNoShow: {
+    type: Boolean,
+    default: false,
+  },
+  noShowMarkedAt: Date,
+  noShowMarkedBy: String,
+  
+  // Payment fields - Enhanced for Stripe
   paymentType: {
     type: String,
-    enum: ['prepaid', 'postpaid'],
-    default: 'postpaid',
+    enum: ['prepaid', 'postpaid', 'card_on_file'],
+    default: 'card_on_file',
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'paid', 'failed'],
+    enum: ['pending', 'paid', 'failed', 'refunded', 'charged_late_cancel', 'charged_no_show'],
     default: 'pending',
   },
+  
+  // Stripe identifiers
+  stripeCustomerId: String,
+  stripeSetupIntentId: String,
+  stripePaymentMethodId: String,
   stripeSessionId: String,
+  stripePaymentIntentId: String,
+  
+  // Card setup status
+  cardSetupComplete: {
+    type: Boolean,
+    default: false,
+  },
+  
   isPaid: {
     type: Boolean,
     default: false,
@@ -94,10 +194,52 @@ const bookingSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  
+  // Cancellation tracking
+  cancelledAt: Date,
+  cancellationReason: String,
+  
+  // Charge tracking (for late cancel / no-show)
+  chargeAttempts: [{
+    attemptedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    amount: Number,
+    reason: {
+      type: String,
+      enum: ['late_cancellation', 'no_show'],
+    },
+    success: Boolean,
+    stripePaymentIntentId: String,
+    errorMessage: String,
+  }],
+  
+  // Audit trail
+  auditLog: [{
+    action: String,
+    performedBy: String,
+    performedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    details: String,
+  }],
+  
   createdAt: {
     type: Date,
     default: Date.now,
   },
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+// Update timestamp on save
+bookingSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
 });
 
 module.exports = mongoose.model('Booking', bookingSchema);
