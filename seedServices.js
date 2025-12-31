@@ -44,7 +44,7 @@ const seedServices = async () => {
     
     console.log('\n📋 Services added:');
     insertedServices.forEach(service => {
-      console.log(`   - ${service.name} ($${service.price}) - ${service.duration} min`);
+      console.log(`   - ${service.name} (€${service.price}) - ${service.duration} min`);
     });
 
     mongoose.connection.close();

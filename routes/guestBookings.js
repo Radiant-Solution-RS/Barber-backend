@@ -407,7 +407,7 @@ router.delete('/:id/cancel', async (req, res) => {
           action: 'late_cancellation_charged',
           performedBy: `Guest: ${email}`,
           performedAt: new Date(),
-          details: `Cancelled within 24 hours. Full amount charged: $${booking.totalPrice}`,
+          details: `Cancelled within 24 hours. Full amount charged: €${booking.totalPrice}`,
         });
         
         // Update guest customer

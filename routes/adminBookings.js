@@ -105,7 +105,7 @@ router.post('/:id/mark-no-show', authMiddleware, adminMiddleware, async (req, re
       action: 'no_show_marked',
       performedBy: req.user.email || req.user.name,
       performedAt: new Date(),
-      details: `Marked as no-show. ${chargeSuccess ? `Charged $${booking.totalPrice}` : `Charge failed: ${chargeError || 'Card not on file'}`}. ${notes || ''}`,
+      details: `Marked as no-show. ${chargeSuccess ? `Charged €${booking.totalPrice}` : `Charge failed: ${chargeError || 'Card not on file'}`}. ${notes || ''}`,
     });
     
     await booking.save();
@@ -183,7 +183,7 @@ router.post('/:id/retry-charge', authMiddleware, adminMiddleware, async (req, re
         action: 'manual_charge_retry_success',
         performedBy: req.user.email || req.user.name,
         performedAt: new Date(),
-        details: `Successfully charged $${booking.totalPrice} - Reason: ${reason}`,
+        details: `Successfully charged €${booking.totalPrice} - Reason: ${reason}`,
       });
       
       await booking.save();

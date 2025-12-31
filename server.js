@@ -139,7 +139,7 @@ app.post('/api/bookings/webhook',
               action: 'payment_confirmed',
               performedBy: 'Stripe Webhook',
               performedAt: new Date(),
-              details: `Payment confirmed: $${(paymentIntent.amount / 100).toFixed(2)} - Reason: ${reason || 'booking_payment'}`,
+              details: `Payment confirmed: €${(paymentIntent.amount / 100).toFixed(2)} - Reason: ${reason || 'booking_payment'}`,
             });
             await booking.save();
             console.log(`✅ Booking ${booking._id} payment confirmed`);
