@@ -63,16 +63,88 @@ router.get('/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Customer not found' });
     }
 
-    const bookings = await Booking.find({ user: req.params.id })
+    // Get regular bookings (with user account)
+    const regularBookings = await Booking.find({ user: req.params.id })
       .populate('service', 'name')
       .populate('barber', 'name')
       .populate('salon', 'name')
       .sort({ createdAt: -1 });
 
+    // Also get guest bookings by matching email
+    const guestBookings = await Booking.find({ 
+      'customerInfo.email': customer.email,
+      isGuestBooking: true 
+    })
+      .populate('service', 'name')
+      .populate('barber', 'name')
+      .populate('salon', 'name')
+      .sort({ createdAt: -1 });
+
+    // Combine both types of bookings
+    const allBookings = [...regularBookings, ...guestBookings]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
     res.json({
       customer,
-      bookings,
-      totalBookings: bookings.length,
+      bookings: allBookings,
+      totalBookings: allBookings.length,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get customer info by email (for guest bookings)
+router.get('/by-email/:email', authMiddleware, async (req, res) => {
+  try {
+    const email = req.params.email.toLowerCase().trim();
+
+    // Try to find registered user by email (case-insensitive)
+    const customer = await User.findOne({ 
+      email: { $regex: new RegExp(`^${email}$`, 'i') },
+      role: 'customer' 
+    }).select('-password');
+
+    // Get all bookings with this email (both registered and guest)
+    const regularBookings = customer ? await Booking.find({ user: customer._id })
+      .populate('service', 'name')
+      .populate('barber', 'name')
+      .populate('salon', 'name')
+      .sort({ createdAt: -1 }) : [];
+
+    // Get guest bookings by email (with or without isGuestBooking flag)
+    const guestBookings = await Booking.find({ 
+      'customerInfo.email': { $regex: new RegExp(`^${email}$`, 'i') },
+      $or: [
+        { isGuestBooking: true },
+        { user: null }  // Bookings without user are guest bookings
+      ]
+    })
+      .populate('service', 'name')
+      .populate('barber', 'name')
+      .populate('salon', 'name')
+      .sort({ createdAt: -1 });
+
+    // Combine all bookings
+    const allBookings = [...regularBookings, ...guestBookings]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // If customer exists, return full info; otherwise return guest info from first booking
+    const customerInfo = customer || (guestBookings.length > 0 ? {
+      name: guestBookings[0].customerInfo.name,
+      email: guestBookings[0].customerInfo.email,
+      phone: guestBookings[0].customerInfo.phone,
+      isGuest: true
+    } : null);
+
+    if (!customerInfo) {
+      return res.status(404).json({ message: 'No customer found with this email' });
+    }
+
+    res.json({
+      customer: customerInfo,
+      bookings: allBookings,
+      totalBookings: allBookings.length,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

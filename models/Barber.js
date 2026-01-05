@@ -19,6 +19,12 @@ const barberSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  // Role/Rights for login access
+  role: {
+    type: String,
+    enum: ['receptionist', 'admin', 'owner'],
+    default: 'receptionist',
+  },
   // Work schedule for each day of the week
   schedule: {
     monday: {

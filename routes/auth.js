@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 
 
 router.post('/register', async (req, res) => {
@@ -83,6 +83,47 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Admin-only: Create employee accounts (Receptionist, Admin, Owner)
+router.post('/create-employee', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { name, email, password, phone, role } = req.body;
+
+    // Validate role - only staff roles allowed
+    if (!['receptionist', 'admin', 'owner'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role. Must be receptionist, admin, or owner' });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword,
+      phone,
+      role,
+    });
+
+    await user.save();
+
+    res.status(201).json({
+      message: `${role.charAt(0).toUpperCase() + role.slice(1)} account created successfully`,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.put('/user/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -125,6 +166,39 @@ router.put('/user/:id', authMiddleware, async (req, res) => {
         marketingConsent: user.marketingConsent,
         prepaymentRequired: user.prepaymentRequired,
         note: user.note,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update user role by email (Admin only)
+router.put('/user-by-email/:email', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { email } = req.params;
+    const { role } = req.body;
+
+    // Validate role
+    if (!['receptionist', 'admin', 'owner'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found with this email' });
+    }
+
+    user.role = role;
+    await user.save();
+
+    res.json({
+      message: 'User role updated successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
         role: user.role,
       },
     });

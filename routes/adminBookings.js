@@ -3,128 +3,26 @@ const router = express.Router();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const Booking = require('../models/Booking');
 const GuestCustomer = require('../models/GuestCustomer');
-const { authMiddleware, adminMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminMiddleware, adminOrReceptionistMiddleware } = require('../middleware/auth');
 
 /**
- * ADMIN BOOKING MANAGEMENT ROUTES
+ * ADMIN & RECEPTIONIST BOOKING MANAGEMENT ROUTES
  * 
- * Handles admin-specific booking operations:
- * - Mark bookings as no-show
- * - Trigger late cancellation charges
+ * Handles staff-specific booking operations:
+ * - DISABLED: Mark bookings as no-show (removed as per Treatwell model)
+ * - DISABLED: Trigger late cancellation charges (removed as per Treatwell model)
  * - View customer history
- * - Manual charge retries
+ * - Manual booking creation
  */
 
 /**
  * POST /api/admin/bookings/:id/mark-no-show
- * 
- * Mark a booking as no-show and charge full amount
+ * DISABLED: No-show feature removed as per Treatwell model
  */
 router.post('/:id/mark-no-show', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { notes } = req.body;
-    
-    const booking = await Booking.findById(id).populate('guestCustomer');
-    
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
-    }
-    
-    if (booking.isNoShow) {
-      return res.status(400).json({ message: 'Booking already marked as no-show' });
-    }
-    
-    // Mark as no-show
-    booking.isNoShow = true;
-    booking.noShowMarkedAt = new Date();
-    booking.noShowMarkedBy = req.user.email || req.user.name;
-    booking.status = 'cancelled';
-    
-    // Try to charge the customer
-    let chargeSuccess = false;
-    let chargeError = null;
-    
-    if (booking.cardSetupComplete && booking.stripePaymentMethodId) {
-      try {
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: Math.round(booking.totalPrice * 100),
-          currency: 'usd',
-          customer: booking.stripeCustomerId,
-          payment_method: booking.stripePaymentMethodId,
-          off_session: true,
-          confirm: true,
-          description: `No-show charge - ${booking.services.map(s => s.serviceName).join(', ')}`,
-          metadata: {
-            bookingId: booking._id.toString(),
-            reason: 'no_show',
-            markedBy: req.user.email || req.user.name,
-          },
-        });
-        
-        booking.paymentStatus = 'charged_no_show';
-        booking.isPaid = true;
-        booking.stripePaymentIntentId = paymentIntent.id;
-        chargeSuccess = true;
-        
-        booking.chargeAttempts.push({
-          attemptedAt: new Date(),
-          amount: booking.totalPrice,
-          reason: 'no_show',
-          success: true,
-          stripePaymentIntentId: paymentIntent.id,
-        });
-        
-        // Update guest customer no-show count
-        if (booking.guestCustomer) {
-          booking.guestCustomer.noShowCount += 1;
-          booking.guestCustomer.noShowHistory.push({
-            bookingId: booking._id,
-            markedAt: new Date(),
-            markedBy: req.user.email || req.user.name,
-          });
-          await booking.guestCustomer.save();
-        }
-        
-      } catch (err) {
-        console.error('Error charging no-show:', err);
-        chargeError = err.message;
-        chargeSuccess = false;
-        
-        booking.chargeAttempts.push({
-          attemptedAt: new Date(),
-          amount: booking.totalPrice,
-          reason: 'no_show',
-          success: false,
-          errorMessage: err.message,
-        });
-      }
-    }
-    
-    booking.auditLog.push({
-      action: 'no_show_marked',
-      performedBy: req.user.email || req.user.name,
-      performedAt: new Date(),
-      details: `Marked as no-show. ${chargeSuccess ? `Charged €${booking.totalPrice}` : `Charge failed: ${chargeError || 'Card not on file'}`}. ${notes || ''}`,
-    });
-    
-    await booking.save();
-    await booking.populate('barber services.serviceId guestCustomer');
-    
-    res.json({
-      message: chargeSuccess 
-        ? 'Booking marked as no-show and customer charged successfully' 
-        : 'Booking marked as no-show but charge failed',
-      charged: chargeSuccess,
-      amount: chargeSuccess ? booking.totalPrice : 0,
-      error: chargeError,
-      booking,
-    });
-    
-  } catch (error) {
-    console.error('Error marking no-show:', error);
-    res.status(500).json({ message: 'Failed to mark no-show', error: error.message });
-  }
+  return res.status(403).json({ 
+    message: 'No-show feature has been disabled as per business requirements.' 
+  });
 });
 
 /**

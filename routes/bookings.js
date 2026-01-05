@@ -165,6 +165,40 @@ router.patch('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   }
 });
 
+// Update booking details (admin/receptionist only)
+router.put('/:id', authMiddleware, async (req, res) => {
+  try {
+    // Check if user is admin, owner, or receptionist
+    const isStaff = req.user.role === 'admin' || req.user.role === 'owner' || req.user.role === 'receptionist';
+    if (!isStaff) {
+      return res.status(403).json({ message: 'Access denied. Staff only.' });
+    }
+
+    const { date, time, barber, service, notes } = req.body;
+    
+    const updateData = {};
+    if (date) updateData.date = date;
+    if (time) updateData.time = time;
+    if (barber) updateData.barber = barber;
+    if (service) updateData.service = service;
+    if (notes !== undefined) updateData.notes = notes;
+    
+    const booking = await Booking.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate('user salon barber service');
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    res.json(booking);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Delete booking
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {

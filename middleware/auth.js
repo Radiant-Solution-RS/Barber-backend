@@ -23,4 +23,18 @@ const adminMiddleware = (req, res, next) => {
   next();
 };
 
-module.exports = { authMiddleware, adminMiddleware };
+const receptionistMiddleware = (req, res, next) => {
+  if (req.user.role !== 'receptionist' && req.user.role !== 'admin' && req.user.role !== 'owner') {
+    return res.status(403).json({ message: 'Access denied. Receptionist, Admin or Owner only.' });
+  }
+  next();
+};
+
+const adminOrReceptionistMiddleware = (req, res, next) => {
+  if (req.user.role !== 'receptionist' && req.user.role !== 'admin' && req.user.role !== 'owner') {
+    return res.status(403).json({ message: 'Access denied. Staff access required.' });
+  }
+  next();
+};
+
+module.exports = { authMiddleware, adminMiddleware, receptionistMiddleware, adminOrReceptionistMiddleware };

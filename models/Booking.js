@@ -131,13 +131,13 @@ const bookingSchema = new mongoose.Schema({
     type: Date,
   },
   
-  // No-show tracking
-  isNoShow: {
-    type: Boolean,
-    default: false,
-  },
-  noShowMarkedAt: Date,
-  noShowMarkedBy: String,
+  // DISABLED: No-show tracking removed as per Treatwell model
+  // isNoShow: {
+  //   type: Boolean,
+  //   default: false,
+  // },
+  // noShowMarkedAt: Date,
+  // noShowMarkedBy: String,
   
   // Payment fields - Enhanced for Stripe
   paymentType: {
