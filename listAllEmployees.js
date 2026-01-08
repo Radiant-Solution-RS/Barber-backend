@@ -1,5 +1,8 @@
 /**
- * List All Employees with Login Access
+ * List All E    
+ * 
+ * 
+employees with Login Access
  * 
  * This script displays all users and their login credentials
  * (Note: Passwords are hashed, so we can't show them - only emails)

@@ -31,9 +31,12 @@ const receptionistMiddleware = (req, res, next) => {
 };
 
 const adminOrReceptionistMiddleware = (req, res, next) => {
+  console.log('🔐 Checking admin/receptionist access for user:', req.user);
   if (req.user.role !== 'receptionist' && req.user.role !== 'admin' && req.user.role !== 'owner') {
+    console.log('❌ Access denied! User role:', req.user.role);
     return res.status(403).json({ message: 'Access denied. Staff access required.' });
   }
+  console.log('✅ Access granted! User role:', req.user.role);
   next();
 };
 

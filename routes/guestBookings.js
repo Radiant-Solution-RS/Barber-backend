@@ -184,7 +184,6 @@ router.post('/create', async (req, res) => {
     const booking = new Booking({
       // No user reference - this is a guest booking
       user: null,
-      isGuestBooking: true,  // Mark as guest booking for calendar display
       guestCustomer: guestCustomer._id,
       customerInfo: {
         name: customerInfo.name,
@@ -192,7 +191,7 @@ router.post('/create', async (req, res) => {
         phone: customerInfo.phone,
       },
       services: validatedServices,
-      // Set ACTUAL service data from validated services (not just first one)
+      // Also set first service as main service for backward compatibility
       service: validatedServices[0].serviceId,
       serviceName: validatedServices[0].serviceName,
       totalPrice,

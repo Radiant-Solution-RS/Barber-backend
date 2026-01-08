@@ -208,7 +208,7 @@ const bookingSchema = new mongoose.Schema({
     amount: Number,
     reason: {
       type: String,
-      enum: ['late_cancellation', 'no_show'],
+      enum: ['late_cancellation', 'no_show', 'service_completed', 'manual_retry'],
     },
     success: Boolean,
     stripePaymentIntentId: String,

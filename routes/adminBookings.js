@@ -15,6 +15,12 @@ const { authMiddleware, adminMiddleware, adminOrReceptionistMiddleware } = requi
  * - Manual booking creation
  */
 
+// Test endpoint to verify route is working
+router.get('/test', authMiddleware, (req, res) => {
+  console.log('✅ Test route hit!');
+  res.json({ message: 'Admin bookings route is working!', user: req.user });
+});
+
 /**
  * POST /api/admin/bookings/:id/mark-no-show
  * DISABLED: No-show feature removed as per Treatwell model
@@ -207,6 +213,165 @@ router.get('/all-with-guests', authMiddleware, adminMiddleware, async (req, res)
   } catch (error) {
     console.error('Error fetching all bookings:', error);
     res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/bookings/:id/charge-payment
+ * 
+ * Charge payment after service completion (for admin/receptionist)
+ * This allows staff to charge the customer's card after the haircut is done
+ */
+router.post('/:id/charge-payment', authMiddleware, adminOrReceptionistMiddleware, async (req, res) => {
+  console.log('\n========================================');
+  console.log('👉 CHARGE PAYMENT ENDPOINT HIT');
+  console.log('User:', req.user);
+  console.log('Booking ID:', req.params.id);
+  console.log('========================================\n');
+  
+  try {
+    const { id } = req.params;
+    console.log('💳 Charge payment request for booking:', id);
+    
+    const booking = await Booking.findById(id).populate('guestCustomer');
+    
+    if (!booking) {
+      console.log('❌ Booking not found:', id);
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+    
+    console.log('📋 Booking found:', {
+      isPaid: booking.isPaid,
+      cardSetupComplete: booking.cardSetupComplete,
+      stripePaymentMethodId: booking.stripePaymentMethodId,
+      stripeCustomerId: booking.stripeCustomerId,
+      price: booking.price,
+      totalPrice: booking.totalPrice
+    });
+    
+    // Check if already paid
+    if (booking.isPaid) {
+      return res.status(400).json({ message: 'Booking already paid' });
+    }
+    
+    // Check if card is on file
+    if (!booking.cardSetupComplete || !booking.stripePaymentMethodId) {
+      return res.status(400).json({ 
+        message: 'No card on file. Customer needs to provide payment method.' 
+      });
+    }
+    
+    // Determine the amount to charge
+    const chargeAmount = booking.totalPrice || booking.price || 0;
+    
+    if (chargeAmount <= 0) {
+      return res.status(400).json({ 
+        message: 'Invalid booking amount. Cannot charge $0.' 
+      });
+    }
+    
+    // Get service description
+    const serviceDescription = booking.serviceName || 
+      (booking.services && booking.services.length > 0 ? booking.services.map(s => s.serviceName).join(', ') : 'Service');
+    
+    console.log('💰 Attempting to charge:', {
+      amount: chargeAmount,
+      amountInCents: Math.round(chargeAmount * 100),
+      customerId: booking.stripeCustomerId,
+      paymentMethodId: booking.stripePaymentMethodId,
+      description: serviceDescription
+    });
+    
+    // Charge the card
+    try {
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(chargeAmount * 100), // Convert to cents
+        currency: 'usd',
+        customer: booking.stripeCustomerId,
+        payment_method: booking.stripePaymentMethodId,
+        off_session: true,
+        confirm: true,
+        description: `Payment for service - ${serviceDescription}`,
+        metadata: {
+          bookingId: booking._id.toString(),
+          chargedBy: req.user.email || req.user.name,
+          reason: 'service_completed',
+        },
+      });
+      
+      console.log('✅ Payment successful:', paymentIntent.id);
+      
+      // Update booking - mark as paid AND completed
+      booking.paymentStatus = 'paid';
+      booking.isPaid = true;
+      booking.status = 'completed'; // Mark booking as completed when payment is charged
+      booking.stripePaymentIntentId = paymentIntent.id;
+      
+      booking.chargeAttempts.push({
+        attemptedAt: new Date(),
+        amount: chargeAmount,
+        reason: 'service_completed',
+        success: true,
+        stripePaymentIntentId: paymentIntent.id,
+      });
+      
+      booking.auditLog.push({
+        action: 'payment_charged_after_service',
+        performedBy: req.user.email || req.user.name,
+        performedAt: new Date(),
+        details: `Payment charged after service completion: €${chargeAmount}`,
+      });
+      
+      await booking.save();
+      
+      res.json({
+        success: true,
+        message: 'Payment charged successfully!',
+        amount: chargeAmount,
+        booking,
+      });
+      
+    } catch (stripeError) {
+      console.error('❌ Stripe charge error:', stripeError);
+      console.error('Error details:', {
+        type: stripeError.type,
+        code: stripeError.code,
+        message: stripeError.message
+      });
+      
+      // Log failed attempt
+      booking.chargeAttempts.push({
+        attemptedAt: new Date(),
+        amount: chargeAmount,
+        reason: 'service_completed',
+        success: false,
+        errorMessage: stripeError.message,
+      });
+      
+      booking.auditLog.push({
+        action: 'payment_charge_failed',
+        performedBy: req.user.email || req.user.name,
+        performedAt: new Date(),
+        details: `Payment charge failed: ${stripeError.message}`,
+      });
+      
+      await booking.save();
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Payment charge failed',
+        error: stripeError.message,
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Error charging payment:', error);
+    console.error('Full error:', error.stack);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to charge payment', 
+      error: error.message 
+    });
   }
 });
 

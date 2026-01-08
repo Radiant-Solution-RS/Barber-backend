@@ -12,6 +12,14 @@ const barberSchema = new mongoose.Schema({
   },
   phone: String,
   specialties: [String],
+  profession: {
+    type: String,
+    default: ''
+  },
+  description: {
+    type: String,
+    default: ''
+  },
   services: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Service' }],
   avatar: String,
   profileImage: String,
