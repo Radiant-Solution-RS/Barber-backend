@@ -222,6 +222,7 @@ app.use('/api/customers', require('./routes/customers'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/reviews', require('./routes/reviews'));
+app.use('/api/availability', require('./routes/availability')); // New availability API
 
 // Health check
 app.get('/api/health', (req, res) => {

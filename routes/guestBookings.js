@@ -19,6 +19,43 @@ const Service = require('../models/Service');
  */
 
 /**
+ * POST /api/guest-bookings/check-payment-eligibility
+ * 
+ * Check if customer is eligible for "Pay at Venue" option
+ * Based on no-show history
+ */
+router.post('/check-payment-eligibility', async (req, res) => {
+  try {
+    const { email, phone } = req.body;
+    
+    if (!email || !phone) {
+      return res.status(400).json({ message: 'Email and phone are required' });
+    }
+    
+    // Find guest customer
+    const guestCustomer = await GuestCustomer.findOne({
+      email: email.toLowerCase(),
+      phone,
+    });
+    
+    // If new customer or no no-show history, allow "Pay at Venue"
+    const canPayAtVenue = !guestCustomer || guestCustomer.noShowCount === 0;
+    
+    res.json({
+      canPayAtVenue,
+      noShowCount: guestCustomer?.noShowCount || 0,
+      message: canPayAtVenue 
+        ? 'Customer can pay at venue' 
+        : 'Card required due to previous no-shows',
+    });
+    
+  } catch (error) {
+    console.error('Error checking payment eligibility:', error);
+    res.status(500).json({ message: 'Failed to check eligibility', error: error.message });
+  }
+});
+
+/**
  * POST /api/guest-bookings/create-setup-intent
  * 
  * Step 1: Create Stripe SetupIntent for card collection
@@ -108,6 +145,7 @@ router.post('/create', async (req, res) => {
       notes,
       cancellationPolicyAccepted,
       setupIntentId,
+      paymentType, // 'card' or 'pay_at_venue'
     } = req.body;
     
     // Validate required fields
@@ -127,15 +165,12 @@ router.post('/create', async (req, res) => {
       return res.status(400).json({ message: 'You must accept the cancellation policy' });
     }
     
-    if (!setupIntentId) {
+    // Check if Pay at Venue is selected
+    const isPayAtVenue = paymentType === 'pay_at_venue';
+    
+    // If paying with card, setup intent is required
+    if (!isPayAtVenue && !setupIntentId) {
       return res.status(400).json({ message: 'Card setup is required' });
-    }
-    
-    // Verify SetupIntent is successful
-    const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
-    
-    if (setupIntent.status !== 'succeeded') {
-      return res.status(400).json({ message: 'Card setup not complete. Please try again.' });
     }
     
     // Find or create guest customer
@@ -144,12 +179,52 @@ router.post('/create', async (req, res) => {
       phone: customerInfo.phone,
     });
     
-    if (!guestCustomer) {
-      return res.status(400).json({ message: 'Customer not found. Please restart the booking process.' });
+    // If Pay at Venue, check if customer is eligible
+    if (isPayAtVenue) {
+      if (guestCustomer && guestCustomer.noShowCount > 0) {
+        return res.status(400).json({ 
+          message: 'You have previous no-shows. Card details are required for booking.',
+          noShowCount: guestCustomer.noShowCount 
+        });
+      }
     }
     
-    // Update guest customer with payment method
-    guestCustomer.stripePaymentMethodId = setupIntent.payment_method;
+    let stripeCustomerId = guestCustomer?.stripeCustomerId;
+    let stripePaymentMethodId = null;
+    
+    // If card payment, verify setup intent
+    if (!isPayAtVenue) {
+      const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+      
+      if (setupIntent.status !== 'succeeded') {
+        return res.status(400).json({ message: 'Card setup not complete. Please try again.' });
+      }
+      
+      stripePaymentMethodId = setupIntent.payment_method;
+      stripeCustomerId = setupIntent.customer;
+    }
+    
+    // Create guest customer if doesn't exist
+    if (!guestCustomer) {
+      guestCustomer = new GuestCustomer({
+        name: customerInfo.name,
+        email: customerInfo.email.toLowerCase(),
+        phone: customerInfo.phone,
+        stripeCustomerId,
+        stripePaymentMethodId,
+      });
+      await guestCustomer.save();
+    } else {
+      // Update existing customer
+      guestCustomer.name = customerInfo.name;
+      if (stripePaymentMethodId) {
+        guestCustomer.stripePaymentMethodId = stripePaymentMethodId;
+      }
+      if (stripeCustomerId) {
+        guestCustomer.stripeCustomerId = stripeCustomerId;
+      }
+      await guestCustomer.save();
+    }
     
     // Check if customer has previous no-shows
     const hasNoShowHistory = guestCustomer.noShowCount > 0;
@@ -204,14 +279,14 @@ router.post('/create', async (req, res) => {
       notes,
       cancellationPolicyAccepted: true,
       cancellationPolicyAcceptedAt: new Date(),
-      // Stripe information
-      stripeCustomerId: guestCustomer.stripeCustomerId,
-      stripeSetupIntentId: setupIntentId,
-      stripePaymentMethodId: setupIntent.payment_method,
-      cardSetupComplete: true,
-      // Payment type depends on no-show history
-      paymentType: hasNoShowHistory ? 'prepaid' : 'card_on_file',
-      paymentStatus: hasNoShowHistory ? 'pending' : 'pending',
+      // Stripe information (only if card payment)
+      stripeCustomerId: isPayAtVenue ? null : guestCustomer.stripeCustomerId,
+      stripeSetupIntentId: isPayAtVenue ? null : setupIntentId,
+      stripePaymentMethodId: isPayAtVenue ? null : stripePaymentMethodId,
+      cardSetupComplete: !isPayAtVenue,
+      // Payment type
+      paymentType: isPayAtVenue ? 'pay_at_venue' : (hasNoShowHistory ? 'prepaid' : 'card_on_file'),
+      paymentStatus: 'pending',
       isPaid: false,
       status: 'pending',
       source: 'Website',
@@ -219,15 +294,17 @@ router.post('/create', async (req, res) => {
         action: 'booking_created',
         performedBy: `Guest: ${customerInfo.email}`,
         performedAt: new Date(),
-        details: `Guest booking created. ${hasNoShowHistory ? 'Customer has no-show history - payment required.' : 'Card on file.'}`,
+        details: isPayAtVenue 
+          ? 'Guest booking created with Pay at Venue option' 
+          : `Guest booking created. ${hasNoShowHistory ? 'Customer has no-show history - payment required.' : 'Card on file.'}`,
       }],
     });
     
     await booking.save();
     await guestCustomer.save();
     
-    // If customer has no-show history, charge immediately
-    let paymentRequired = hasNoShowHistory;
+    // If customer has no-show history AND paid with card, charge immediately
+    let paymentRequired = hasNoShowHistory && !isPayAtVenue;
     let paymentIntentId = null;
     
     if (paymentRequired) {
@@ -275,9 +352,12 @@ router.post('/create', async (req, res) => {
       booking,
       paymentRequired,
       paymentIntentId,
-      message: paymentRequired 
-        ? 'Booking created and payment charged (customer has no-show history)' 
-        : 'Booking created successfully with card on file',
+      paymentType: isPayAtVenue ? 'pay_at_venue' : 'card',
+      message: isPayAtVenue
+        ? 'Booking created successfully. Please pay at the venue.'
+        : (paymentRequired 
+          ? 'Booking created and payment charged (customer has no-show history)' 
+          : 'Booking created successfully with card on file'),
     });
     
   } catch (error) {
